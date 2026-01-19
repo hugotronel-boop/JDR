@@ -271,10 +271,11 @@
                 // Simulation dégâts si score dé très bas
                 if (diceScore && diceScore < 5) updateHP(-15);
 
-            } catch (error) {
-                loader.innerText = "Erreur : Vérifie ta clé API Gemini dans le code.";
-                console.error(error);
-            }
+} catch (error) {
+    // Ce message nous donnera la vraie raison technique
+    loader.innerText = "Détails de l'erreur : " + error.message;
+    console.error(error);
+}
         }
 
         function updateHP(amount) {
