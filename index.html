@@ -136,8 +136,8 @@
     </div>
 
     <script>
-        // 🔑 COLLE TA CLÉ API GEMINI ENTRE LES GUILLEMETS CI-DESSOUS
-        const GEMINI_API_KEY = "AIzaSyBKneA2QD42ld6EK4rIEKEWa8vVghXCXn0"; 
+        // 🔑 COLLE TA CLÉ API GEMINI CI-DESSOUS
+        const GEMINI_API_KEY = "TA_NOUVELLE_CLE_ICI"; 
 
         const universThemes = {
             "Médiéval Fantastique": { primary: "#e94560", dark: "#1a1a2e", light: "#16213e" },
@@ -154,7 +154,7 @@
         let gameStyle = "";
         let isTyping = false;
         let hp = 100;
-        let chatHistory = []; // Pour que l'IA se souvienne de l'histoire
+        let chatHistory = []; 
 
         function updateTheme() {
             const selected = document.getElementById('game-style').value;
@@ -166,7 +166,6 @@
                 document.documentElement.style.setProperty('--accent', theme.primary + "44");
             }
         }
-        document.getElementById('game-style').addEventListener('change', updateTheme);
 
         function startGame() {
             playerName = document.getElementById('char-name').value.trim();
@@ -177,21 +176,17 @@
             document.getElementById('game-page').classList.add('active');
             document.getElementById('game-header').innerText = `${playerName}`;
             
-            generateImage(`Scène de départ JDR, style ${gameStyle}, haute qualité, immersif`);
-            
-            // Premier message de l'IA
-            IA_Simulation(null, `Commence une aventure de JDR. Univers: ${gameStyle}. Le héros s'appelle ${playerName}. Décris brièvement le lieu de départ et demande ce qu'il fait.`);
+            generateImage(`Scène de départ JDR, style ${gameStyle}, immersif`);
+            IA_Simulation(null, `Commence une aventure de JDR. Univers: ${gameStyle}. Le héros s'appelle ${playerName}. Décris le lieu et demande ce qu'il fait.`);
         }
 
-        // --- MACHINE À ÉCRIRE (FIXED SPACES) ---
         function typeWriter(element, text, speed = 25) {
             isTyping = true;
             let i = 0;
             element.textContent = ""; 
             function type() {
                 if (i < text.length) {
-                    element.textContent += text.charAt(i); 
-                    i++;
+                    element.textContent += text.charAt(i); i++;
                     document.getElementById('story-container').scrollTop = document.getElementById('story-container').scrollHeight;
                     setTimeout(type, speed);
                 } else { isTyping = false; }
@@ -199,12 +194,62 @@
             type();
         }
 
+        async function IA_Simulation(diceScore = null, actionJoueur = "") {
+            const container = document.getElementById('story-container');
+            const loader = document.createElement('div');
+            loader.className = "message narrator";
+            loader.innerText = "... Le narrateur réfléchit ...";
+            container.appendChild(loader);
+            container.scrollTop = container.scrollHeight;
+
+            let promptComplet = actionJoueur;
+            if (diceScore) promptComplet += ` (Résultat du dé : ${diceScore}/20)`;
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: chatHistory.concat([{ parts: [{ text: promptComplet }] }]),
+                        systemInstruction: { 
+                            parts: [{ text: `Tu es un MJ expert. Univers: ${gameStyle}. Joueur: ${playerName}. Sois immersif. Si le dé < 7, échec douloureux. Si dé > 15, succès critique. Finis par une question.` }]
+                        }
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    loader.innerText = "Erreur Google : " + data.error.message;
+                    return;
+                }
+
+                if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+                    loader.innerText = "L'IA n'a pas pu répondre (Contenu bloqué ou vide).";
+                    return;
+                }
+
+                const reponseIA = data.candidates[0].content.parts[0].text;
+                loader.remove();
+                addMessage(reponseIA, 'narrator', false, true);
+                
+                chatHistory.push({ role: "user", parts: [{ text: promptComplet }] });
+                chatHistory.push({ role: "model", parts: [{ text: reponseIA }] });
+
+                generateImage(`JDR illustration, ${gameStyle}, ${reponseIA.substring(0, 80)}`);
+                if (diceScore && diceScore < 5) updateHP(-15);
+
+            } catch (error) {
+                loader.innerText = "Détails de l'erreur : " + error.message;
+            }
+        }
+
         function rollDice() {
             if (isTyping) return;
             const input = document.getElementById('user-input');
-            const actionText = input.value.trim();
-            if (actionText === "") return alert("Décrivez votre action !");
-
+            const actionText = input.value.trim() || "Je tente une action";
             const btn = document.getElementById('dice-btn');
             btn.classList.add('rolling');
             
@@ -220,76 +265,10 @@
         function handleAction() {
             if (isTyping) return;
             const input = document.getElementById('user-input');
-            const text = input.value.trim();
-            if (text === "") return;
-            addMessage(text, 'player');
+            if (input.value.trim() === "") return;
+            addMessage(input.value, 'player');
+            IA_Simulation(null, input.value);
             input.value = "";
-            IA_Simulation(null, text);
-        }
-
-        async function IA_Simulation(diceScore = null, actionJoueur = "") {
-            const container = document.getElementById('story-container');
-            
-            // Message d'attente
-            const loader = document.createElement('div');
-            loader.className = "message narrator";
-            loader.innerText = "... Le narrateur réfléchit ...";
-            container.appendChild(loader);
-            container.scrollTop = container.scrollHeight;
-
-            // Construction du prompt
-            let prompt = actionJoueur;
-            if (diceScore) prompt += ` (Le joueur a lancé un dé et a fait : ${diceScore}/20)`;
-
-            try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-                
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }]
-                    })
-                });
-
-                const data = await response.json();
-
-                // SI GOOGLE RENVOIE UNE ERREUR TECHNIQUE
-                if (data.error) {
-                    loader.innerText = "Erreur Google : " + data.error.message;
-                    return;
-                }
-
-                // SI L'IA A ÉTÉ BLOQUÉE (SÉCURITÉ)
-                if (!data.candidates || !data.candidates[0]) {
-                    loader.innerText = "L'IA n'a pas pu répondre. Vérifie si ta clé est active sur Google AI Studio.";
-                    console.log("Réponse reçue :", data);
-                    return;
-                }
-
-                const reponseIA = data.candidates[0].content.parts[0].text;
-                loader.remove();
-                addMessage(reponseIA, 'narrator', false, true);
-                generateImage(`JDR illustration, ${gameStyle}, ${reponseIA.substring(0, 80)}`);
-
-            } catch (error) {
-                loader.innerText = "Erreur de connexion : " + error.message;
-            }
-} catch (error) {
-    // Ce message nous donnera la vraie raison technique
-    loader.innerText = "Détails de l'erreur : " + error.message;
-    console.error(error);
-}
-        }
-
-        function updateHP(amount) {
-            hp = Math.max(0, Math.min(100, hp + amount));
-            document.getElementById('hp-fill').style.width = hp + "%";
-        }
-
-        function toggleInventory() {
-            const modal = document.getElementById('inventory-modal');
-            modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
         }
 
         function addMessage(text, type, isHTML = false, useTypewriter = false) {
@@ -306,9 +285,18 @@
             const img = document.getElementById('ambiance-image');
             img.classList.remove('loaded');
             document.getElementById('image-loading').style.display = 'block';
-            const seed = Math.floor(Math.random() * 10000);
-            img.src = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=800&height=400&nologo=true&seed=${seed}`;
+            img.src = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=800&height=400&nologo=true&seed=${Math.random()}`;
             img.onload = () => { img.classList.add('loaded'); document.getElementById('image-loading').style.display = 'none'; };
+        }
+
+        function updateHP(amount) {
+            hp = Math.max(0, Math.min(100, hp + amount));
+            document.getElementById('hp-fill').style.width = hp + "%";
+        }
+
+        function toggleInventory() {
+            const modal = document.getElementById('inventory-modal');
+            modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
         }
 
         document.getElementById('user-input').addEventListener("keypress", (e) => { if (e.key === "Enter") handleAction(); });
