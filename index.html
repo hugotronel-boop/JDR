@@ -248,29 +248,33 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: chatHistory.concat([{ parts: [{ text: prompt }] }]),
-                        systemInstruction: { 
-                            parts: [{ text: `Tu es un maître de jeu expert. Univers: ${gameStyle}. Joueur: ${playerName}. Sois immersif, utilise le "vous", décris l'environnement. Si le dé est bas (<7), inflige un revers ou des dégâts. Si le dé est haut (>15), accorde une réussite éclatante. Finis toujours par une question courte.` }]
-                        }
+                        contents: [{ parts: [{ text: prompt }] }]
                     })
                 });
 
                 const data = await response.json();
-                const reponseIA = data.candidates[0].content.parts[0].text;
-                
-                loader.remove(); // On enlève le message de chargement
-                addMessage(reponseIA, 'narrator', false, true);
-                
-                // On garde en mémoire pour le contexte
-                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
-                chatHistory.push({ role: "model", parts: [{ text: reponseIA }] });
 
-                // Mise à jour de l'image basée sur la réponse
+                // SI GOOGLE RENVOIE UNE ERREUR TECHNIQUE
+                if (data.error) {
+                    loader.innerText = "Erreur Google : " + data.error.message;
+                    return;
+                }
+
+                // SI L'IA A ÉTÉ BLOQUÉE (SÉCURITÉ)
+                if (!data.candidates || !data.candidates[0]) {
+                    loader.innerText = "L'IA n'a pas pu répondre. Vérifie si ta clé est active sur Google AI Studio.";
+                    console.log("Réponse reçue :", data);
+                    return;
+                }
+
+                const reponseIA = data.candidates[0].content.parts[0].text;
+                loader.remove();
+                addMessage(reponseIA, 'narrator', false, true);
                 generateImage(`JDR illustration, ${gameStyle}, ${reponseIA.substring(0, 80)}`);
 
-                // Simulation dégâts si score dé très bas
-                if (diceScore && diceScore < 5) updateHP(-15);
-
+            } catch (error) {
+                loader.innerText = "Erreur de connexion : " + error.message;
+            }
 } catch (error) {
     // Ce message nous donnera la vraie raison technique
     loader.innerText = "Détails de l'erreur : " + error.message;
