@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>JDR Narrateur IA</title>
+    <style>
+        :root {
+            --primary: #e94560;
+            --bg-dark: #1a1a2e;
+            --bg-light: #16213e;
+            --accent: #0f3460;
+            --text: #e0e0e0;
+        }
+
+        * { transition: background-color 0.6s ease, border-color 0.4s ease, color 0.4s ease; }
+
+        body {
+            margin: 0; font-family: 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-dark); color: var(--text);
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        .page { display: none; flex-direction: column; height: 100%; width: 100%; }
+        .active { display: flex; }
+
+        /* --- ACCUEIL --- */
+        #menu-page { justify-content: center; align-items: center; padding: 15px; text-align: center; }
+        .card { background: var(--bg-light); padding: 25px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 350px; width: 90%; margin: auto; border: 1px solid var(--accent); }
+        h1 { color: var(--primary); margin-bottom: 20px; font-size: 1.6rem; }
+        .input-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; margin-bottom: 5px; font-size: 0.9rem; font-weight: bold; color: var(--primary); }
+        select, input[type="text"] { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--accent); background: var(--bg-dark); color: white; box-sizing: border-box; font-size: 16px; outline: none; }
+        .btn-start { background: var(--primary); color: white; border: none; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; width: 100%; margin-top: 10px; }
+
+        /* --- JEU --- */
+        header { padding: 10px; background: var(--bg-light); border-bottom: 1px solid var(--accent); position: relative; }
+        .stats-bar { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: bold; }
+        .hp-box { display: flex; align-items: center; gap: 5px; }
+        .hp-bar { width: 100px; height: 10px; background: #333; border-radius: 5px; overflow: hidden; }
+        #hp-fill { width: 100%; height: 100%; background: #ff4d4d; transition: width 0.5s; }
+
+        #image-container {
+            width: 100%; height: 180px; background-color: var(--bg-dark);
+            display: flex; justify-content: center; align-items: center;
+            overflow: hidden; border-bottom: 1px solid var(--accent); position: relative;
+        }
+        #ambiance-image { max-width: 100%; max-height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.8s; }
+        #ambiance-image.loaded { opacity: 1; }
+        #image-loading { position: absolute; color: var(--text); font-size: 0.8rem; font-style: italic; }
+
+        #story-container { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        .message { max-width: 85%; padding: 12px 15px; border-radius: 15px; line-height: 1.5; font-size: 0.95rem; animation: fadeIn 0.4s ease; overflow-wrap: break-word; }
+        .narrator { align-self: flex-start; background: var(--bg-light); border-left: 4px solid var(--primary); }
+        .player { align-self: flex-end; background: var(--primary); color: white; font-style: italic; }
+        
+        .dice-result { font-weight: bold; color: #ffd700; display: block; margin-top: 5px; border-top: 1px dashed rgba(255,255,255,0.3); padding-top: 5px; }
+
+        .input-area { padding: 10px; background: var(--bg-light); display: flex; gap: 8px; align-items: center; padding-bottom: env(safe-area-inset-bottom, 15px); }
+        #user-input { flex: 1; background: var(--bg-dark); border: 1px solid var(--accent); padding: 12px; border-radius: 25px; color: white; font-size: 16px; outline: none; }
+        
+        .btn-action { background: var(--primary); border: none; color: white; border-radius: 50%; width: 45px; height: 45px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+        .btn-dice { background: #ffd700; color: #000; }
+        .btn-bag { background: #4a4e69; color: white; }
+
+        /* Modal Inventaire */
+        #inventory-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; }
+        .inventory-content { background: var(--bg-light); padding: 20px; border-radius: 15px; width: 80%; max-width: 300px; text-align: center; border: 1px solid var(--primary); }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes roll { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .rolling { animation: roll 0.4s infinite; }
+    </style>
+</head>
+<body>
+
+    <section id="menu-page" class="page active">
+        <div class="card">
+            <h1>Aventure IA</h1>
+            <div class="input-group">
+                <label>Nom du Héros</label>
+                <input type="text" id="char-name" placeholder="Votre nom..." autocomplete="off">
+            </div>
+            <div class="input-group">
+                <label>Univers du Jeu</label>
+                <select id="game-style">
+                    <option value="Médiéval Fantastique">⚔️ Médiéval Fantastique</option>
+                    <option value="Science-Fiction / Cyberpunk">🤖 SF / Cyberpunk</option>
+                    <option value="Space Opera">🚀 Space Opera</option>
+                    <option value="Horreur Lovecraftienne">🐙 Horreur Lovecraftienne</option>
+                    <option value="Post-Apocalyptique">☢️ Post-Apocalyptique</option>
+                    <option value="Western">🤠 Western</option>
+                    <option value="Super-Héros">🦸 Super-Héros</option>
+                    <option value="Samouraï / Féodal Japonais">⛩️ Samouraï / Féodal</option>
+                </select>
+            </div>
+            <button class="btn-start" onclick="startGame()">Commencer</button>
+        </div>
+    </section>
+
+    <section id="game-page" class="page">
+        <header>
+            <div class="stats-bar">
+                <div id="game-header">Univers</div>
+                <div class="hp-box">
+                    <span>❤️</span>
+                    <div class="hp-bar"><div id="hp-fill"></div></div>
+                </div>
+            </div>
+        </header>
+        
+        <div id="image-container">
+            <img id="ambiance-image" src="" alt="Ambiance">
+            <span id="image-loading">Chargement du monde...</span>
+        </div>
+        
+        <div id="story-container"></div>
+        
+        <div class="input-area">
+            <button class="btn-action btn-bag" onclick="toggleInventory()">🎒</button>
+            <button class="btn-action btn-dice" id="dice-btn" onclick="rollDice()">🎲</button>
+            <input type="text" id="user-input" placeholder="Que faites-vous ?" autocomplete="off">
+            <button class="btn-action" onclick="handleAction()">OK</button>
+        </div>
+    </section>
+
+    <div id="inventory-modal" onclick="toggleInventory()">
+        <div class="inventory-content" onclick="event.stopPropagation()">
+            <h2 style="color:var(--primary)">Inventaire</h2>
+            <ul id="inventory-list" style="list-style:none; padding:0; text-align:left;">
+                <li>🔹 Sac de voyage</li>
+                <li>🔹 Ration de nourriture</li>
+            </ul>
+            <button class="btn-start" onclick="toggleInventory()">Fermer</button>
+        </div>
+    </div>
+
+    <script>
+        // 🔑 COLLE TA CLÉ API GEMINI ENTRE LES GUILLEMETS CI-DESSOUS
+        const GEMINI_API_KEY = "AIzaSyCGElKniLQbCKI4xkBlWTqpQD5OPolO6WA"; 
+
+        const universThemes = {
+            "Médiéval Fantastique": { primary: "#e94560", dark: "#1a1a2e", light: "#16213e" },
+            "Science-Fiction / Cyberpunk": { primary: "#00f5ff", dark: "#050505", light: "#0d1117" },
+            "Space Opera": { primary: "#bd93f9", dark: "#0f0c29", light: "#1a1a40" },
+            "Horreur Lovecraftienne": { primary: "#50fa7b", dark: "#0a100d", light: "#141d1a" },
+            "Post-Apocalyptique": { primary: "#ffb86c", dark: "#2b2622", light: "#3d352e" },
+            "Western": { primary: "#f4a460", dark: "#3d2b1f", light: "#5c4033" },
+            "Super-Héros": { primary: "#ff0000", dark: "#0a0a0a", light: "#1a1a1a" },
+            "Samouraï / Féodal Japonais": { primary: "#bc002d", dark: "#1a0000", light: "#2b0000" }
+        };
+
+        let playerName = "";
+        let gameStyle = "";
+        let isTyping = false;
+        let hp = 100;
+        let chatHistory = []; // Pour que l'IA se souvienne de l'histoire
+
+        function updateTheme() {
+            const selected = document.getElementById('game-style').value;
+            const theme = universThemes[selected];
+            if (theme) {
+                document.documentElement.style.setProperty('--primary', theme.primary);
+                document.documentElement.style.setProperty('--bg-dark', theme.dark);
+                document.documentElement.style.setProperty('--bg-light', theme.light);
+                document.documentElement.style.setProperty('--accent', theme.primary + "44");
+            }
+        }
+        document.getElementById('game-style').addEventListener('change', updateTheme);
+
+        function startGame() {
+            playerName = document.getElementById('char-name').value.trim();
+            gameStyle = document.getElementById('game-style').value;
+            if (playerName === "") return alert("Nom requis !");
+            updateTheme();
+            document.getElementById('menu-page').classList.remove('active');
+            document.getElementById('game-page').classList.add('active');
+            document.getElementById('game-header').innerText = `${playerName}`;
+            
+            generateImage(`Scène de départ JDR, style ${gameStyle}, haute qualité, immersif`);
+            
+            // Premier message de l'IA
+            IA_Simulation(null, `Commence une aventure de JDR. Univers: ${gameStyle}. Le héros s'appelle ${playerName}. Décris brièvement le lieu de départ et demande ce qu'il fait.`);
+        }
+
+        // --- MACHINE À ÉCRIRE (FIXED SPACES) ---
+        function typeWriter(element, text, speed = 25) {
+            isTyping = true;
+            let i = 0;
+            element.textContent = ""; 
+            function type() {
+                if (i < text.length) {
+                    element.textContent += text.charAt(i); 
+                    i++;
+                    document.getElementById('story-container').scrollTop = document.getElementById('story-container').scrollHeight;
+                    setTimeout(type, speed);
+                } else { isTyping = false; }
+            }
+            type();
+        }
+
+        function rollDice() {
+            if (isTyping) return;
+            const input = document.getElementById('user-input');
+            const actionText = input.value.trim();
+            if (actionText === "") return alert("Décrivez votre action !");
+
+            const btn = document.getElementById('dice-btn');
+            btn.classList.add('rolling');
+            
+            setTimeout(() => {
+                btn.classList.remove('rolling');
+                const result = Math.floor(Math.random() * 20) + 1;
+                addMessage(`${actionText} <span class="dice-result">🎲 Résultat : ${result}/20</span>`, 'player', true);
+                input.value = "";
+                IA_Simulation(result, actionText);
+            }, 600);
+        }
+
+        function handleAction() {
+            if (isTyping) return;
+            const input = document.getElementById('user-input');
+            const text = input.value.trim();
+            if (text === "") return;
+            addMessage(text, 'player');
+            input.value = "";
+            IA_Simulation(null, text);
+        }
+
+        async function IA_Simulation(diceScore = null, actionJoueur = "") {
+            const container = document.getElementById('story-container');
+            
+            // Message d'attente
+            const loader = document.createElement('div');
+            loader.className = "message narrator";
+            loader.innerText = "... Le narrateur réfléchit ...";
+            container.appendChild(loader);
+            container.scrollTop = container.scrollHeight;
+
+            // Construction du prompt
+            let prompt = actionJoueur;
+            if (diceScore) prompt += ` (Le joueur a lancé un dé et a fait : ${diceScore}/20)`;
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: chatHistory.concat([{ parts: [{ text: prompt }] }]),
+                        systemInstruction: { 
+                            parts: [{ text: `Tu es un maître de jeu expert. Univers: ${gameStyle}. Joueur: ${playerName}. Sois immersif, utilise le "vous", décris l'environnement. Si le dé est bas (<7), inflige un revers ou des dégâts. Si le dé est haut (>15), accorde une réussite éclatante. Finis toujours par une question courte.` }]
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                const reponseIA = data.candidates[0].content.parts[0].text;
+                
+                loader.remove(); // On enlève le message de chargement
+                addMessage(reponseIA, 'narrator', false, true);
+                
+                // On garde en mémoire pour le contexte
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                chatHistory.push({ role: "model", parts: [{ text: reponseIA }] });
+
+                // Mise à jour de l'image basée sur la réponse
+                generateImage(`JDR illustration, ${gameStyle}, ${reponseIA.substring(0, 80)}`);
+
+                // Simulation dégâts si score dé très bas
+                if (diceScore && diceScore < 5) updateHP(-15);
+
+            } catch (error) {
+                loader.innerText = "Erreur : Vérifie ta clé API Gemini dans le code.";
+                console.error(error);
+            }
+        }
+
+        function updateHP(amount) {
+            hp = Math.max(0, Math.min(100, hp + amount));
+            document.getElementById('hp-fill').style.width = hp + "%";
+        }
+
+        function toggleInventory() {
+            const modal = document.getElementById('inventory-modal');
+            modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
+        }
+
+        function addMessage(text, type, isHTML = false, useTypewriter = false) {
+            const container = document.getElementById('story-container');
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            container.appendChild(div);
+            if (useTypewriter) typeWriter(div, text);
+            else { div[isHTML ? 'innerHTML' : 'textContent'] = text; }
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function generateImage(prompt) {
+            const img = document.getElementById('ambiance-image');
+            img.classList.remove('loaded');
+            document.getElementById('image-loading').style.display = 'block';
+            const seed = Math.floor(Math.random() * 10000);
+            img.src = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=800&height=400&nologo=true&seed=${seed}`;
+            img.onload = () => { img.classList.add('loaded'); document.getElementById('image-loading').style.display = 'none'; };
+        }
+
+        document.getElementById('user-input').addEventListener("keypress", (e) => { if (e.key === "Enter") handleAction(); });
+    </script>
+</body>
+</html>
