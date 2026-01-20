@@ -1,132 +1,103 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>JDR Narrateur IA</title>
-    <style>
-        :root { --primary: #e94560; --bg: #1a1a2e; --text: #e0e0e0; }
-        body { margin: 0; font-family: sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        .page { display: none; flex-direction: column; height: 100%; }
-        .active { display: flex; }
-        #menu { justify-content: center; align-items: center; text-align: center; height: 100%; }
-        .card { background: #16213e; padding: 25px; border-radius: 15px; border: 1px solid #0f3460; width: 85%; max-width: 400px; margin: auto; }
-        input, select, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; font-size: 16px; box-sizing: border-box; }
-        input, select { background: #1a1a2e; color: white; border: 1px solid #0f3460; }
-        .btn { background: var(--primary); color: white; font-weight: bold; cursor: pointer; }
-        header { padding: 15px; background: #16213e; border-bottom: 1px solid #0f3460; font-weight: bold; text-align: center; }
-        #chat { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 85%; padding: 12px; border-radius: 10px; line-height: 1.4; word-wrap: break-word; font-size: 15px; }
-        .mj { align-self: flex-start; background: #16213e; border-left: 4px solid var(--primary); }
-        .me { align-self: flex-end; background: var(--primary); color: white; }
-        .ui { padding: 10px; background: #16213e; display: flex; gap: 10px; padding-bottom: env(safe-area-inset-bottom, 20px); }
-        #user-in { flex: 1; border-radius: 20px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>JDR Narrateur IA</title>
+
+<style>
+:root { --primary:#e94560; --bg:#1a1a2e; --text:#e0e0e0; }
+body { margin:0; font-family:sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
+.page { display:none; flex-direction:column; height:100%; }
+.active { display:flex; }
+.card { background:#16213e; padding:25px; border-radius:15px; width:85%; max-width:400px; margin:auto; }
+input, select, button { width:100%; padding:12px; margin:10px 0; border-radius:8px; border:none; font-size:16px; }
+input, select { background:#1a1a2e; color:white; border:1px solid #0f3460; }
+.btn { background:var(--primary); color:white; font-weight:bold; }
+header { padding:15px; background:#16213e; text-align:center; }
+#chat { flex:1; padding:15px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+.msg { max-width:85%; padding:12px; border-radius:10px; }
+.mj { align-self:flex-start; background:#16213e; border-left:4px solid var(--primary); }
+.me { align-self:flex-end; background:var(--primary); color:white; }
+.ui { display:flex; gap:10px; padding:10px; background:#16213e; }
+#user-in { flex:1; border-radius:20px; }
+</style>
 </head>
+
 <body>
 
-    <section id="menu" class="page active">
-        <div class="card">
-            <h1 style="color:var(--primary)">Aventure IA</h1>
-            <p id="key-status" style="font-size: 12px; color: #888;">Vérification de la clé...</p>
-            <input type="text" id="name" placeholder="Nom du héros...">
-            <select id="style">
-                <option value="Médiéval">⚔️ Médiéval</option>
-                <option value="Cyberpunk">🤖 Cyberpunk</option>
-            </select>
-            <button class="btn" onclick="start()">Commencer l'aventure</button>
-        </div>
-    </section>
+<section id="menu" class="page active">
+  <div class="card">
+    <h1 style="color:var(--primary)">Aventure IA</h1>
+    <input id="name" placeholder="Nom du héros">
+    <select id="style">
+      <option>Médiéval</option>
+      <option>Cyberpunk</option>
+    </select>
+    <button class="btn" onclick="start()">Commencer</button>
+  </div>
+</section>
 
-    <section id="game" class="page">
-        <header id="h-name">Joueur</header>
-        <div id="chat"></div>
-        <div class="ui">
-            <input type="text" id="user-in" placeholder="Que fais-tu ?">
-            <button class="btn" style="width: 70px;" onclick="handleSend()">OK</button>
-        </div>
-    </section>
+<section id="game" class="page">
+  <header id="h-name"></header>
+  <div id="chat"></div>
+  <div class="ui">
+    <input id="user-in" placeholder="Que fais-tu ?">
+    <button class="btn" onclick="send()">OK</button>
+  </div>
+</section>
 
-    <script>
-        // RÉCUPÉRATION DE LA CLÉ DANS L'URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const API_KEY = urlParams.get('key');
+<script>
+const WORKER_URL = "https://TON-WORKER.workers.dev";
 
-        // Mise à jour de l'affichage du menu
-        if (API_KEY) {
-            document.getElementById('key-status').innerText = "✅ Clé détectée dans l'URL";
-            document.getElementById('key-status').style.color = "#4caf50";
-        } else {
-            document.getElementById('key-status').innerText = "❌ Aucune clé trouvée. Ajoutez ?key=VOTRE_CLE à l'URL.";
-            document.getElementById('key-status').style.color = "#ff4d4d";
-        }
+let player = "";
+let style = "";
 
-        let pName = "";
-        let gStyle = "";
+function start() {
+  player = document.getElementById("name").value || "Héros";
+  style = document.getElementById("style").value;
 
-        function start() {
-            if (!API_KEY) {
-                alert("Erreur : Vous devez ajouter votre clé API dans l'URL pour jouer.");
-                return;
-            }
-            pName = document.getElementById('name').value || "Héros";
-            gStyle = document.getElementById('style').value;
-            document.getElementById('menu').classList.remove('active');
-            document.getElementById('game').classList.add('active');
-            document.getElementById('h-name').innerText = pName;
-            
-            talk(`Tu es un Maître du Jeu de JDR. Univers: ${gStyle}. Joueur: ${pName}. Commence l'aventure en décrivant brièvement le lieu de départ.`);
-        }
+  document.getElementById("menu").classList.remove("active");
+  document.getElementById("game").classList.add("active");
+  document.getElementById("h-name").innerText = player;
 
-        async function talk(prompt) {
-            const container = document.getElementById('chat');
-            const loader = document.createElement('div');
-            loader.className = "msg mj";
-            loader.innerText = "...";
-            container.appendChild(loader);
-            container.scrollTop = container.scrollHeight;
+  talk("Commence l'aventure.");
+}
 
-            try {
-                // Utilisation de la version v1beta pour plus de compatibilité
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
-                
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }]
-                    })
-                });
+async function talk(text) {
+  addMsg("...", "mj");
 
-                const data = await response.json();
-                loader.remove();
+  const res = await fetch(WORKER_URL, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      prompt: text,
+      name: player,
+      style: style
+    })
+  });
 
-                if (data.candidates && data.candidates[0].content) {
-                    addMsg(data.candidates[0].content.parts[0].text, 'mj');
-                } else {
-                    addMsg("Erreur API : Vérifiez que votre clé est valide dans l'URL.", 'mj');
-                    console.error(data);
-                }
-            } catch (e) {
-                loader.innerText = "Erreur de connexion. Vérifiez votre internet.";
-            }
-        }
+  const data = await res.json();
+  document.querySelector(".mj:last-child").remove();
+  addMsg(data.text, "mj");
+}
 
-        function addMsg(text, type) {
-            const div = document.createElement('div');
-            div.className = `msg ${type}`;
-            div.innerText = text;
-            document.getElementById('chat').appendChild(div);
-            document.getElementById('chat').scrollTop = 99999;
-        }
+function send() {
+  const input = document.getElementById("user-in");
+  if (!input.value.trim()) return;
+  addMsg(input.value, "me");
+  talk(input.value);
+  input.value = "";
+}
 
-        function handleSend() {
-            const input = document.getElementById('user-in');
-            if (!input.value.trim()) return;
-            addMsg(input.value, 'me');
-            talk(input.value);
-            input.value = "";
-        }
-    </script>
+function addMsg(text, cls) {
+  const div = document.createElement("div");
+  div.className = "msg " + cls;
+  div.innerText = text;
+  document.getElementById("chat").appendChild(div);
+  document.getElementById("chat").scrollTop = 99999;
+}
+</script>
+
 </body>
 </html>
