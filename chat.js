@@ -1,17 +1,23 @@
 export async function onRequestPost(context) {
-  // 1. Récupérer la question du joueur
-  const { prompt } = await context.request.json();
+  const { prompt, name, style } = await context.request.json();
 
-  // 2. Appeler l'IA de Cloudflare (Llama 3 par exemple)
-  const answer = await context.env.AI.run('@cf/meta/llama-3-8b-instruct', {
-    messages: [
-      { role: 'system', content: 'Tu es le maître du jeu d’un RPG narratif. Réponds en français.' },
-      { role: 'user', content: prompt }
-    ]
-  });
+  // On configure le système pour qu'il sache quel style de jeu utiliser
+  const systemPrompt = `Tu es le maître du jeu d'un RPG ${style}. 
+    Le joueur s'appelle ${name}. 
+    Réponds de manière immersive, courte (max 3 phrases) et en français.`;
 
-  // 3. Renvoyer la réponse au format JSON
-  return new Response(JSON.stringify(answer), {
-    headers: { 'Content-Type': 'application/json' }
-  });
+  try {
+    const response = await context.env.AI.run('@cf/meta/llama-3-8b-instruct', {
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ]
+    });
+
+    return new Response(JSON.stringify(response), {
+      headers: { "Content-Type": "application/json" }
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+  }
 }
