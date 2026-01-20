@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>JDR Narrateur IA</title>
-
 <style>
 :root { --primary:#e94560; --bg:#1a1a2e; --text:#e0e0e0; }
 body { margin:0; font-family:sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
@@ -13,17 +12,16 @@ body { margin:0; font-family:sans-serif; background:var(--bg); color:var(--text)
 .card { background:#16213e; padding:25px; border-radius:15px; width:85%; max-width:400px; margin:auto; }
 input, select, button { width:100%; padding:12px; margin:10px 0; border-radius:8px; border:none; font-size:16px; }
 input, select { background:#1a1a2e; color:white; border:1px solid #0f3460; }
-.btn { background:var(--primary); color:white; font-weight:bold; }
+.btn { background:var(--primary); color:white; font-weight:bold; cursor:pointer; }
 header { padding:15px; background:#16213e; text-align:center; }
 #chat { flex:1; padding:15px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
-.msg { max-width:85%; padding:12px; border-radius:10px; }
+.msg { max-width:85%; padding:12px; border-radius:10px; line-height: 1.4; }
 .mj { align-self:flex-start; background:#16213e; border-left:4px solid var(--primary); }
 .me { align-self:flex-end; background:var(--primary); color:white; }
 .ui { display:flex; gap:10px; padding:10px; background:#16213e; }
 #user-in { flex:1; border-radius:20px; }
 </style>
 </head>
-
 <body>
 
 <section id="menu" class="page active">
@@ -31,8 +29,8 @@ header { padding:15px; background:#16213e; text-align:center; }
     <h1 style="color:var(--primary)">Aventure IA</h1>
     <input id="name" placeholder="Nom du héros">
     <select id="style">
-      <option>Médiéval</option>
-      <option>Cyberpunk</option>
+      <option value="Médiéval Fantastique">Médiéval</option>
+      <option value="Cyberpunk">Cyberpunk</option>
     </select>
     <button class="btn" onclick="start()">Commencer</button>
   </div>
@@ -42,7 +40,7 @@ header { padding:15px; background:#16213e; text-align:center; }
   <header id="h-name"></header>
   <div id="chat"></div>
   <div class="ui">
-    <input id="user-in" placeholder="Que fais-tu ?">
+    <input id="user-in" placeholder="Que fais-tu ?" onkeypress="if(event.key==='Enter') send()">
     <button class="btn" onclick="send()">OK</button>
   </div>
 </section>
@@ -54,62 +52,46 @@ let style = "";
 function start() {
   player = document.getElementById("name").value || "Héros";
   style = document.getElementById("style").value;
-
   document.getElementById("menu").classList.remove("active");
   document.getElementById("game").classList.add("active");
-  document.getElementById("h-name").innerText = `${player} (${style})`;
-
-  // On lance l'intro
-  talk(`Démarre une aventure ${style} pour mon personnage nommé ${player}.`);
+  document.getElementById("h-name").innerText = player + " - " + style;
+  talk("Démarre l'aventure et décris-moi où je me trouve.");
 }
 
 async function talk(text) {
-  // On ajoute une bulle de chargement
   addMsg("Le narrateur réfléchit...", "mj");
-
   try {
-    const res = await fetch("/functions/chat", { // On utilise le chemin relatif
+    const res = await fetch("/functions/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: text,
-        name: player,
-        style: style
-      })
+      body: JSON.stringify({ prompt: text, name: player, style: style })
     });
-
     const data = await res.json();
-    
-    // On supprime le message "réfléchit"
-    const msgs = document.querySelectorAll(".mj");
-    msgs[msgs.length - 1].remove();
-
-    // On affiche la réponse (data.response est le format standard de Cloudflare AI)
+    const dots = document.querySelectorAll(".mj");
+    dots[dots.length - 1].remove();
     addMsg(data.response, "mj");
   } catch (error) {
-    console.error("Erreur:", error);
-    addMsg("Désolé, j'ai perdu la connexion avec le MJ.", "mj");
+    console.error(error);
+    addMsg("Erreur de connexion avec l'IA.", "mj");
   }
 }
 
 function send() {
   const input = document.getElementById("user-in");
   if (!input.value.trim()) return;
-  const message = input.value;
-  addMsg(message, "me");
-  talk(message);
+  addMsg(input.value, "me");
+  talk(input.value);
   input.value = "";
 }
 
 function addMsg(text, cls) {
-  const chat = document.getElementById("chat");
   const div = document.createElement("div");
   div.className = "msg " + cls;
   div.innerText = text;
+  const chat = document.getElementById("chat");
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
 }
 </script>
-
 </body>
 </html>
